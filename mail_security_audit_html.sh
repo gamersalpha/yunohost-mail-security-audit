@@ -6,6 +6,7 @@
 # Licence : MIT
 # Repository : https://github.com/gamersalpha/yunohost-mail-security-audit
 # Description : Génère un rapport HTML de sécurité mail sur une période configurable
+# Version : 1.3.1 - Géolocalisation améliorée avec drapeaux
 # ===================================================================
 
 LOG_FILE="/var/log/mail.log"
@@ -23,6 +24,116 @@ PERIOD_DISPLAY="du $START_DATE au $END_DATE ($ANALYSIS_PERIOD jours)"
 HOSTNAME=$(hostname -f)
 PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "N/A")
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+CURRENT_TIMESTAMP=$(date +%s)
+
+# Fonction de géolocalisation IP avec emojis drapeaux
+get_country() {
+    local ip=$1
+    if command -v geoiplookup &> /dev/null; then
+        # Récupérer le code pays et le nom complet
+        geoip_result=$(geoiplookup "$ip" 2>/dev/null)
+        country_code=$(echo "$geoip_result" | awk -F': ' '{print $2}' | awk -F',' '{print $1}' | xargs)
+        country_name=$(echo "$geoip_result" | awk -F', ' '{print $2}' | xargs)
+        
+        # Gérer les cas spéciaux
+        if [[ -z "$country_code" || "$country_code" == "IP Address not found" ]]; then
+            echo "🌍 Inconnu"
+            return
+        fi
+        
+        # Mapper les codes ISO-2 vers les drapeaux et noms
+        case "$country_code" in
+            # Europe
+            "NL") echo "🇳🇱 Pays-Bas" ;;
+            "DE") echo "🇩🇪 Allemagne" ;;
+            "FR") echo "🇫🇷 France" ;;
+            "GB") echo "🇬🇧 Royaume-Uni" ;;
+            "IT") echo "🇮🇹 Italie" ;;
+            "ES") echo "🇪🇸 Espagne" ;;
+            "PL") echo "🇵🇱 Pologne" ;;
+            "RO") echo "🇷🇴 Roumanie" ;;
+            "BE") echo "🇧🇪 Belgique" ;;
+            "CH") echo "🇨🇭 Suisse" ;;
+            "AT") echo "🇦🇹 Autriche" ;;
+            "SE") echo "🇸🇪 Suède" ;;
+            "NO") echo "🇳🇴 Norvège" ;;
+            "DK") echo "🇩🇰 Danemark" ;;
+            "FI") echo "🇫🇮 Finlande" ;;
+            "PT") echo "🇵🇹 Portugal" ;;
+            "GR") echo "🇬🇷 Grèce" ;;
+            "CZ") echo "🇨🇿 Tchéquie" ;;
+            "HU") echo "🇭🇺 Hongrie" ;;
+            "IE") echo "🇮🇪 Irlande" ;;
+            "BG") echo "🇧🇬 Bulgarie" ;;
+            "HR") echo "🇭🇷 Croatie" ;;
+            "SK") echo "🇸🇰 Slovaquie" ;;
+            "LT") echo "🇱🇹 Lituanie" ;;
+            "LV") echo "🇱🇻 Lettonie" ;;
+            "EE") echo "🇪🇪 Estonie" ;;
+            "SI") echo "🇸🇮 Slovénie" ;;
+            
+            # Amériques
+            "US") echo "🇺🇸 États-Unis" ;;
+            "CA") echo "🇨🇦 Canada" ;;
+            "BR") echo "🇧🇷 Brésil" ;;
+            "MX") echo "🇲🇽 Mexique" ;;
+            "AR") echo "🇦🇷 Argentine" ;;
+            "CL") echo "🇨🇱 Chili" ;;
+            "CO") echo "🇨🇴 Colombie" ;;
+            
+            # Asie
+            "CN") echo "🇨🇳 Chine" ;;
+            "RU") echo "🇷🇺 Russie" ;;
+            "IN") echo "🇮🇳 Inde" ;;
+            "JP") echo "🇯🇵 Japon" ;;
+            "KR") echo "🇰🇷 Corée du Sud" ;;
+            "TH") echo "🇹🇭 Thaïlande" ;;
+            "VN") echo "🇻🇳 Vietnam" ;;
+            "ID") echo "🇮🇩 Indonésie" ;;
+            "MY") echo "🇲🇾 Malaisie" ;;
+            "SG") echo "🇸🇬 Singapour" ;;
+            "PH") echo "🇵🇭 Philippines" ;;
+            "TR") echo "🇹🇷 Turquie" ;;
+            "IL") echo "🇮🇱 Israël" ;;
+            "SA") echo "🇸🇦 Arabie Saoudite" ;;
+            "AE") echo "🇦🇪 Émirats Arabes Unis" ;;
+            "IR") echo "🇮🇷 Iran" ;;
+            "IQ") echo "🇮🇶 Irak" ;;
+            "PK") echo "🇵🇰 Pakistan" ;;
+            "BD") echo "🇧🇩 Bangladesh" ;;
+            
+            # Afrique
+            "ZA") echo "🇿🇦 Afrique du Sud" ;;
+            "EG") echo "🇪🇬 Égypte" ;;
+            "NG") echo "🇳🇬 Nigeria" ;;
+            "KE") echo "🇰🇪 Kenya" ;;
+            "MA") echo "🇲🇦 Maroc" ;;
+            "TN") echo "🇹🇳 Tunisie" ;;
+            "DZ") echo "🇩🇿 Algérie" ;;
+            
+            # Océanie
+            "AU") echo "🇦🇺 Australie" ;;
+            "NZ") echo "🇳🇿 Nouvelle-Zélande" ;;
+            
+            # Autres/Génériques
+            "A1") echo "🌐 Proxy Anonyme" ;;
+            "A2") echo "🛰️ Satellite" ;;
+            "AP") echo "🌏 Asie-Pacifique" ;;
+            "EU") echo "🇪🇺 Europe" ;;
+            
+            # Par défaut : afficher le code + nom si disponible
+            *) 
+                if [[ -n "$country_name" ]]; then
+                    echo "🌍 $country_name"
+                else
+                    echo "🌍 $country_code"
+                fi
+                ;;
+        esac
+    else
+        echo "❓ Non installé"
+    fi
+}
 
 # Statistiques sur la période définie (avec tous les logs)
 TOTAL_ATTEMPTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
@@ -82,7 +193,7 @@ TOP_USERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     awk -F= '{print $2}' | \
     sort | uniq -c | sort -rn | head -5)
 
-# Top 5 expéditeurs sur la période (CORRIGÉ - cherche dans qmgr)
+# Top 5 expéditeurs sur la période
 TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "postfix/qmgr" | \
@@ -90,7 +201,6 @@ TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     sed 's/from=<//g' | sed 's/>//g' | \
     sort | uniq -c | sort -rn | head -5)
 
-# Si TOP_SENDERS est vide, essayer sans les < >
 if [ -z "$TOP_SENDERS" ]; then
     TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
         awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
@@ -108,7 +218,6 @@ TOP_RECIPIENTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     sed 's/to=<//g' | sed 's/>//g' | \
     sort | uniq -c | sort -rn | head -5)
 
-# Si TOP_RECIPIENTS est vide, essayer sans les < >
 if [ -z "$TOP_RECIPIENTS" ]; then
     TOP_RECIPIENTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
         awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
@@ -118,7 +227,33 @@ if [ -z "$TOP_RECIPIENTS" ]; then
         sort | uniq -c | sort -rn | head -5)
 fi
 
-# Génération du HTML
+# Statistiques par pays (si geoip disponible)
+declare -A country_stats
+if command -v geoiplookup &> /dev/null; then
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            COUNT=$(echo "$line" | awk '{print $1}')
+            IP=$(echo "$line" | awk '{print $2}')
+            
+            # Obtenir le pays formaté
+            COUNTRY_DISPLAY=$(get_country "$IP")
+            # Extraire juste le nom sans emoji pour le regroupement
+            COUNTRY_KEY=$(echo "$COUNTRY_DISPLAY" | sed 's/^[^ ]* //')
+            
+            ((country_stats["$COUNTRY_DISPLAY"] += COUNT))
+        fi
+    done <<< "$TOP_IPS"
+fi
+
+# Générer le top 5 des pays
+TOP_COUNTRIES=""
+if [ ${#country_stats[@]} -gt 0 ]; then
+    TOP_COUNTRIES=$(for country in "${!country_stats[@]}"; do
+        echo "${country_stats[$country]} $country"
+    done | sort -rn | head -5)
+fi
+
+# Génération du HTML (identique à la version précédente, je ne copie que les parties modifiées)
 cat > "$HTML_FILE" << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="fr">
@@ -168,6 +303,17 @@ cat > "$HTML_FILE" << 'HTMLEOF'
         .alert-danger { background: #fee2e2; border-color: #dc2626; color: #991b1b; }
         .footer { background: #f9fafb; padding: 30px 40px; text-align: center; color: #6b7280; font-size: 14px; border-top: 1px solid #e5e7eb; }
         .footer strong { color: #1f2937; }
+        .activity-indicator { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+        .activity-live { background: #fee2e2; color: #dc2626; animation: pulse 2s infinite; }
+        .activity-recent { background: #fef3c7; color: #d97706; }
+        .activity-old { background: #f3f4f6; color: #6b7280; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .activity-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .activity-live .activity-dot { background: #dc2626; animation: blink 1s infinite; }
+        .activity-recent .activity-dot { background: #d97706; }
+        .activity-old .activity-dot { background: #9ca3af; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .country-flag { font-size: 20px; margin-right: 8px; }
         @media (max-width: 768px) { .stats-grid, .info-grid { grid-template-columns: 1fr; } table { font-size: 14px; } th, td { padding: 12px 8px; } }
     </style>
 </head>
@@ -192,19 +338,22 @@ cat > "$HTML_FILE" << 'HTMLEOF'
                 <div class="stat-card success"><div class="stat-number">EXTERNAL_AUTH_PLACEHOLDER</div><div class="stat-label">Connexions externes</div></div>
             </div>
             <div class="section"><h2 class="section-title">🔔 Alertes de Sécurité</h2>ALERTS_PLACEHOLDER</div>
-            <div class="section"><h2 class="section-title">🎯 Top 5 des IPs Attaquantes</h2><div class="table-container"><table><thead><tr><th>Adresse IP</th><th>Tentatives</th><th>Dernière activité</th><th>Statut</th></tr></thead><tbody>TOP_IPS_PLACEHOLDER</tbody></table></div></div>
+            <div class="section"><h2 class="section-title">🎯 Top 5 des IPs Attaquantes</h2><div class="table-container"><table><thead><tr><th>Adresse IP</th><th>Pays</th><th>Tentatives</th><th>Dernière activité</th><th>Statut</th></tr></thead><tbody>TOP_IPS_PLACEHOLDER</tbody></table></div></div>
+            TOP_COUNTRIES_SECTION_PLACEHOLDER
             <div class="section"><h2 class="section-title">👥 Connexions Légitimes</h2><div class="table-container"><table><thead><tr><th>Utilisateur</th><th>Connexions</th><th>Type</th></tr></thead><tbody>TOP_USERS_PLACEHOLDER</tbody></table></div></div>
             <div class="section"><h2 class="section-title">📧 Top 5 des Expéditeurs</h2><div class="table-container"><table><thead><tr><th>Expéditeur</th><th>Mails envoyés</th><th>Type</th></tr></thead><tbody>TOP_SENDERS_PLACEHOLDER</tbody></table></div></div>
             <div class="section"><h2 class="section-title">📬 Top 5 des Destinataires</h2><div class="table-container"><table><thead><tr><th>Destinataire</th><th>Mails reçus</th><th>Type</th></tr></thead><tbody>TOP_RECIPIENTS_PLACEHOLDER</tbody></table></div></div>
             <div class="section"><h2 class="section-title">🚫 IPs Actuellement Bannies</h2><div class="table-container"><table><thead><tr><th>Jail</th><th>IPs Bannies</th></tr></thead><tbody>BANNED_IPS_PLACEHOLDER</tbody></table></div></div>
         </div>
-        <div class="footer"><p>Rapport généré automatiquement par <strong>Mail Security Audit</strong></p><p>Serveur YunoHost • Fail2ban • Postfix • Dovecot</p></div>
+        <div class="footer"><p>Rapport généré automatiquement par <strong>Mail Security Audit v1.3.1</strong></p><p>Serveur YunoHost • Fail2ban • Postfix • Dovecot • GeoIP</p></div>
     </div>
 </body>
 </html>
 HTMLEOF
 
-# Remplacement des placeholders
+# (Le reste du script est identique - je ne le copie pas pour la concision)
+# Remplacement des placeholders, génération des tableaux, etc.
+
 sed -i "s|HOSTNAME_PLACEHOLDER|$HOSTNAME|g" "$HTML_FILE"
 sed -i "s|PUBLIC_IP_PLACEHOLDER|$PUBLIC_IP|g" "$HTML_FILE"
 sed -i "s|TIMESTAMP_PLACEHOLDER|$TIMESTAMP|g" "$HTML_FILE"
@@ -235,27 +384,39 @@ else
 fi
 sed -i "s|ALERTS_PLACEHOLDER|$ALERTS_HTML|g" "$HTML_FILE"
 
-# Génération du tableau des IPs avec dernière activité
+# Génération du tableau des IPs avec géolocalisation
 TOP_IPS_HTML=""
 while IFS= read -r line; do
     if [ -n "$line" ]; then
         COUNT=$(echo "$line" | awk '{print $1}')
         IP=$(echo "$line" | awk '{print $2}')
         
-        # Trouver la dernière occurrence de cette IP
+        # Géolocalisation avec drapeaux complets
+        COUNTRY=$(get_country "$IP")
+        
+        # Dernière activité
         LAST_SEEN=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
             grep "$IP" | grep "auth=0" | tail -1 | awk '{print $1, $2}' | \
             sed 's/T/ /' | cut -d'.' -f1)
         
-        # Si pas trouvé dans les logs actuels
         if [ -z "$LAST_SEEN" ]; then
-            LAST_SEEN="Inconnue"
+            LAST_SEEN_DISPLAY="Inconnue"
+            ACTIVITY_INDICATOR='<div class="activity-indicator activity-old"><span class="activity-dot"></span>Ancienne</div>'
         else
-            # Formater la date lisible (JJ/MM HH:MM)
-            LAST_SEEN=$(date -d "$LAST_SEEN" '+%d/%m %H:%M' 2>/dev/null || echo "$LAST_SEEN")
+            LAST_SEEN_DISPLAY=$(date -d "$LAST_SEEN" '+%d/%m %H:%M' 2>/dev/null || echo "$LAST_SEEN")
+            LAST_SEEN_TIMESTAMP=$(date -d "$LAST_SEEN" +%s 2>/dev/null || echo 0)
+            TIME_DIFF=$((CURRENT_TIMESTAMP - LAST_SEEN_TIMESTAMP))
+            TIME_DIFF_HOURS=$((TIME_DIFF / 3600))
+            
+            if [ "$TIME_DIFF_HOURS" -lt 1 ]; then
+                ACTIVITY_INDICATOR='<div class="activity-indicator activity-live"><span class="activity-dot"></span>EN COURS</div>'
+            elif [ "$TIME_DIFF_HOURS" -lt 24 ]; then
+                ACTIVITY_INDICATOR='<div class="activity-indicator activity-recent"><span class="activity-dot"></span>Récente</div>'
+            else
+                ACTIVITY_INDICATOR='<div class="activity-indicator activity-old"><span class="activity-dot"></span>Ancienne</div>'
+            fi
         fi
         
-        # Déterminer le badge selon le nombre de tentatives
         if [ "$COUNT" -gt 100 ]; then
             BADGE='<span class="badge badge-danger">Critique</span>'
         elif [ "$COUNT" -gt 50 ]; then
@@ -264,13 +425,37 @@ while IFS= read -r line; do
             BADGE='<span class="badge badge-success">Normal</span>'
         fi
         
-        TOP_IPS_HTML+="<tr><td><strong>$IP</strong></td><td>$COUNT</td><td>$LAST_SEEN</td><td>$BADGE</td></tr>"
+        TOP_IPS_HTML+="<tr><td><strong>$IP</strong></td><td>$COUNTRY</td><td>$COUNT</td><td>$LAST_SEEN_DISPLAY $ACTIVITY_INDICATOR</td><td>$BADGE</td></tr>"
     fi
 done <<< "$TOP_IPS"
-[ -z "$TOP_IPS_HTML" ] && TOP_IPS_HTML='<tr><td colspan="4" style="text-align:center; color: #10b981;">Aucune attaque détectée sur la période ✓</td></tr>'
+[ -z "$TOP_IPS_HTML" ] && TOP_IPS_HTML='<tr><td colspan="5" style="text-align:center; color: #10b981;">Aucune attaque détectée sur la période ✓</td></tr>'
 sed -i "s|TOP_IPS_PLACEHOLDER|$TOP_IPS_HTML|g" "$HTML_FILE"
 
-# Génération du tableau des utilisateurs
+# Génération de la section Top Pays
+if [ -n "$TOP_COUNTRIES" ]; then
+    TOP_COUNTRIES_HTML="<div class=\"section\"><h2 class=\"section-title\">🌍 Top 5 des Pays Attaquants</h2><div class=\"table-container\"><table><thead><tr><th>Pays</th><th>Tentatives totales</th></tr></thead><tbody>"
+    
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            COUNT=$(echo "$line" | awk '{print $1}')
+            COUNTRY=$(echo "$line" | awk '{$1=""; print $0}' | sed 's/^ //')
+            TOP_COUNTRIES_HTML+="<tr><td><strong>$COUNTRY</strong></td><td>$COUNT</td></tr>"
+        fi
+    done <<< "$TOP_COUNTRIES"
+    
+    TOP_COUNTRIES_HTML+="</tbody></table></div></div>"
+    sed -i "s|TOP_COUNTRIES_SECTION_PLACEHOLDER|$TOP_COUNTRIES_HTML|g" "$HTML_FILE"
+else
+    if ! command -v geoiplookup &> /dev/null; then
+        GEOIP_WARNING="<div class=\"alert alert-warning\"><strong>💡 Astuce</strong> : Installez geoip-bin pour voir les pays attaquants : <code>sudo apt install geoip-bin -y</code></div>"
+        sed -i "s|TOP_COUNTRIES_SECTION_PLACEHOLDER|$GEOIP_WARNING|g" "$HTML_FILE"
+    else
+        sed -i "s|TOP_COUNTRIES_SECTION_PLACEHOLDER||g" "$HTML_FILE"
+    fi
+fi
+
+# (Le reste du code pour les autres tableaux et l'envoi d'email reste identique)
+
 TOP_USERS_HTML=""
 while IFS= read -r line; do
     if [ -n "$line" ]; then
@@ -282,7 +467,6 @@ done <<< "$TOP_USERS"
 [ -z "$TOP_USERS_HTML" ] && TOP_USERS_HTML='<tr><td colspan="3" style="text-align:center;">Aucune connexion sur la période</td></tr>'
 sed -i "s|TOP_USERS_PLACEHOLDER|$TOP_USERS_HTML|g" "$HTML_FILE"
 
-# Génération du tableau des expéditeurs
 TOP_SENDERS_HTML=""
 while IFS= read -r line; do
     if [ -n "$line" ]; then
@@ -299,7 +483,6 @@ done <<< "$TOP_SENDERS"
 [ -z "$TOP_SENDERS_HTML" ] && TOP_SENDERS_HTML='<tr><td colspan="3" style="text-align:center;">Aucun mail envoyé sur la période</td></tr>'
 sed -i "s|TOP_SENDERS_PLACEHOLDER|$TOP_SENDERS_HTML|g" "$HTML_FILE"
 
-# Génération du tableau des destinataires
 TOP_RECIPIENTS_HTML=""
 while IFS= read -r line; do
     if [ -n "$line" ]; then
@@ -317,7 +500,6 @@ done <<< "$TOP_RECIPIENTS"
 [ -z "$TOP_RECIPIENTS_HTML" ] && TOP_RECIPIENTS_HTML='<tr><td colspan="3" style="text-align:center;">Aucun destinataire sur la période</td></tr>'
 sed -i "s|TOP_RECIPIENTS_PLACEHOLDER|$TOP_RECIPIENTS_HTML|g" "$HTML_FILE"
 
-# Génération du tableau des IPs bannies
 BANNED_IPS_HTML=""
 for jail in postfix sasl dovecot sshd; do
     if fail2ban-client status "$jail" &>/dev/null; then
@@ -330,7 +512,6 @@ done
 [ -z "$BANNED_IPS_HTML" ] && BANNED_IPS_HTML='<tr><td colspan="2" style="text-align:center; color: #10b981;">Aucune IP bannie actuellement ✓</td></tr>'
 sed -i "s|BANNED_IPS_PLACEHOLDER|$BANNED_IPS_HTML|g" "$HTML_FILE"
 
-# Envoi par email
 if [ -n "$ALERT_EMAIL" ]; then
     if command -v mutt &> /dev/null; then
         mutt -e "set content_type=text/html" -s "$SUBJECT" "$ALERT_EMAIL" < "$HTML_FILE"
@@ -344,7 +525,5 @@ else
     echo "ERREUR : Veuillez configurer ALERT_EMAIL dans le script (ligne 16)"
 fi
 
-# Nettoyage automatique (garde 30 jours)
 find /tmp -name "mail_security_report_*.html" -mtime +30 -delete 2>/dev/null
-
 exit 0
