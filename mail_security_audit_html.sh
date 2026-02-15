@@ -154,7 +154,7 @@ BANNED_TOTAL=0
 if systemctl is-active --quiet fail2ban; then
     FAIL2BAN_STATUS="✓ Actif"
     FAIL2BAN_COLOR="#10b981"
-    for jail in postfix sasl dovecot sshd; do
+    for jail in postfix sasl dovecot sshd recidive; do
         if fail2ban-client status "$jail" &>/dev/null; then
             BANNED=$(fail2ban-client status "$jail" 2>/dev/null | grep "Currently banned" | awk '{print $4}')
             BANNED_TOTAL=$((BANNED_TOTAL + BANNED))
