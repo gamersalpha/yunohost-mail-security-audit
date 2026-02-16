@@ -136,16 +136,16 @@ get_country() {
 }
 
 # Statistiques sur la période définie (avec tous les logs)
-TOTAL_ATTEMPTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOTAL_ATTEMPTS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "auth=0/1" | wc -l)
 
-EXTERNAL_AUTH=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+EXTERNAL_AUTH=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "sasl_method=" | \
     grep -vE "192.168|10\.|172\.(1[6-9]|2[0-9]|3[01])|127\.0\.0\.1" | wc -l)
 
-SENT_MAILS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+SENT_MAILS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "status=sent" | wc -l)
 
@@ -154,7 +154,7 @@ BANNED_TOTAL=0
 if systemctl is-active --quiet fail2ban; then
     FAIL2BAN_STATUS="✓ Actif"
     FAIL2BAN_COLOR="#10b981"
-    for jail in postfix sasl dovecot sshd; do
+    for jail in postfix sasl dovecot sshd recidive; do
         if fail2ban-client status "$jail" &>/dev/null; then
             BANNED=$(fail2ban-client status "$jail" 2>/dev/null | grep "Currently banned" | awk '{print $4}')
             BANNED_TOTAL=$((BANNED_TOTAL + BANNED))
@@ -179,14 +179,14 @@ else
 fi
 
 # Top 5 IPs attaquantes sur la période
-TOP_IPS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOP_IPS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "auth=0" | \
     grep -oE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | \
     sort | uniq -c | sort -rn | head -5)
 
 # Top utilisateurs légitimes sur la période
-TOP_USERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOP_USERS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "sasl_username=" | \
     grep -oE "sasl_username=[^,]+" | \
@@ -194,7 +194,7 @@ TOP_USERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     sort | uniq -c | sort -rn | head -5)
 
 # Top 5 expéditeurs sur la période
-TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOP_SENDERS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "postfix/qmgr" | \
     grep -oE "from=<[^>]+>" | \
@@ -202,7 +202,7 @@ TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     sort | uniq -c | sort -rn | head -5)
 
 if [ -z "$TOP_SENDERS" ]; then
-    TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+    TOP_SENDERS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
         awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
         grep "postfix/qmgr" | \
         grep -oE "from=[^,]+" | \
@@ -211,7 +211,7 @@ if [ -z "$TOP_SENDERS" ]; then
 fi
 
 # Top 5 destinataires sur la période
-TOP_RECIPIENTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOP_RECIPIENTS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "status=sent" | \
     grep -oE "to=<[^>]+>" | \
@@ -219,7 +219,7 @@ TOP_RECIPIENTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     sort | uniq -c | sort -rn | head -5)
 
 if [ -z "$TOP_RECIPIENTS" ]; then
-    TOP_RECIPIENTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+    TOP_RECIPIENTS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
         awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
         grep "status=sent" | \
         grep -oE "to=[^,]+" | \
@@ -395,7 +395,7 @@ while IFS= read -r line; do
         COUNTRY=$(get_country "$IP")
         
         # Dernière activité
-        LAST_SEEN=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+        LAST_SEEN=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
             grep "$IP" | grep "auth=0" | tail -1 | awk '{print $1, $2}' | \
             sed 's/T/ /' | cut -d'.' -f1)
         
