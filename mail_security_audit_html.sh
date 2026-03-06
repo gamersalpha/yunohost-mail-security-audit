@@ -189,6 +189,7 @@ TOP_IPS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
 TOP_USERS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "sasl_username=" | \
+    grep -v "authentication failed" | \
     grep -oE "sasl_username=[^,]+" | \
     awk -F= '{print $2}' | \
     sort | uniq -c | sort -rn | head -5)
