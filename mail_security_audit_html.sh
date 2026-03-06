@@ -501,7 +501,7 @@ done <<< "$TOP_RECIPIENTS"
 sed -i "s|TOP_RECIPIENTS_PLACEHOLDER|$TOP_RECIPIENTS_HTML|g" "$HTML_FILE"
 
 BANNED_IPS_HTML=""
-for jail in postfix sasl dovecot sshd; do
+for jail in postfix sasl dovecot sshd recidive; do
     if fail2ban-client status "$jail" &>/dev/null; then
         BANNED_LIST=$(fail2ban-client status "$jail" 2>/dev/null | grep "Banned IP list" | awk -F: '{print $2}' | xargs)
         if [ -n "$BANNED_LIST" ] && [ "$BANNED_LIST" != " " ]; then
