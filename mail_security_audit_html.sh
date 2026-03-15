@@ -13,9 +13,9 @@ LOG_FILE="/var/log/mail.log"
 AUTH_LOG="/var/log/auth.log"
 HTML_FILE="/tmp/mail_security_report_$(date +%Y%m%d_%H%M%S).html"
 
-# ⚠️ CONFIGURATION - MODIFIEZ CES LIGNES ⚠️
-ALERT_EMAIL="votre-email@domaine.fr"
-ANALYSIS_PERIOD=7  # Nombre de jours à analyser (1=aujourd'hui, 7=semaine, 30=mois)
+# ⚠️ CONFIGURATION - MODIFIEZ CES LIGNES ou définissez les variables avant l'appel du script ⚠️
+ALERT_EMAIL=${ALERT_EMAIL:-votre-email@domaine.fr}
+ANALYSIS_PERIOD=${ANALYSIS_PERIOD:-7}  # Nombre de jours à analyser (1=aujourd'hui, 7=semaine, 30=mois)
 
 # Collecte des données
 END_DATE=$(date '+%Y-%m-%d')
@@ -136,16 +136,16 @@ get_country() {
 }
 
 # Statistiques sur la période définie (avec tous les logs)
-TOTAL_ATTEMPTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOTAL_ATTEMPTS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "auth=0/1" | wc -l)
 
-EXTERNAL_AUTH=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+EXTERNAL_AUTH=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "sasl_method=" | \
     grep -vE "192.168|10\.|172\.(1[6-9]|2[0-9]|3[01])|127\.0\.0\.1" | wc -l)
 
-SENT_MAILS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+SENT_MAILS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "status=sent" | wc -l)
 
@@ -154,7 +154,7 @@ BANNED_TOTAL=0
 if systemctl is-active --quiet fail2ban; then
     FAIL2BAN_STATUS="✓ Actif"
     FAIL2BAN_COLOR="#10b981"
-    for jail in postfix sasl dovecot sshd; do
+    for jail in postfix sasl dovecot sshd recidive; do
         if fail2ban-client status "$jail" &>/dev/null; then
             BANNED=$(fail2ban-client status "$jail" 2>/dev/null | grep "Currently banned" | awk '{print $4}')
             BANNED_TOTAL=$((BANNED_TOTAL + BANNED))
@@ -179,22 +179,23 @@ else
 fi
 
 # Top 5 IPs attaquantes sur la période
-TOP_IPS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOP_IPS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "auth=0" | \
     grep -oE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | \
     sort | uniq -c | sort -rn | head -5)
 
 # Top utilisateurs légitimes sur la période
-TOP_USERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOP_USERS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "sasl_username=" | \
+    grep -v "authentication failed" | \
     grep -oE "sasl_username=[^,]+" | \
     awk -F= '{print $2}' | \
     sort | uniq -c | sort -rn | head -5)
 
 # Top 5 expéditeurs sur la période
-TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOP_SENDERS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "postfix/qmgr" | \
     grep -oE "from=<[^>]+>" | \
@@ -202,7 +203,7 @@ TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     sort | uniq -c | sort -rn | head -5)
 
 if [ -z "$TOP_SENDERS" ]; then
-    TOP_SENDERS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+    TOP_SENDERS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
         awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
         grep "postfix/qmgr" | \
         grep -oE "from=[^,]+" | \
@@ -211,7 +212,7 @@ if [ -z "$TOP_SENDERS" ]; then
 fi
 
 # Top 5 destinataires sur la période
-TOP_RECIPIENTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+TOP_RECIPIENTS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
     awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
     grep "status=sent" | \
     grep -oE "to=<[^>]+>" | \
@@ -219,7 +220,7 @@ TOP_RECIPIENTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
     sort | uniq -c | sort -rn | head -5)
 
 if [ -z "$TOP_RECIPIENTS" ]; then
-    TOP_RECIPIENTS=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+    TOP_RECIPIENTS=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
         awk -v start="$START_DATE" -v end="$END_DATE" '$0 >= start && $0 <= end' | \
         grep "status=sent" | \
         grep -oE "to=[^,]+" | \
@@ -315,6 +316,26 @@ cat > "$HTML_FILE" << 'HTMLEOF'
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
         .country-flag { font-size: 20px; margin-right: 8px; }
         @media (max-width: 768px) { .stats-grid, .info-grid { grid-template-columns: 1fr; } table { font-size: 14px; } th, td { padding: 12px 8px; } }
+        /* ── Détails d'attaque dépliables ── */
+        .attack-details { background: #f8f7ff; border-radius: 10px; margin: 4px 0 8px 0; border: 1px solid #e0d9ff; overflow: hidden; }
+        .attack-details summary { cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; color: #4f46e5; background: #ede9fe; list-style: none; display: flex; align-items: center; gap: 8px; user-select: none; transition: background 0.2s; }
+        .attack-details summary::-webkit-details-marker { display: none; }
+        .attack-details summary::before { content: '▶'; font-size: 10px; transition: transform 0.2s; }
+        .attack-details[open] summary::before { transform: rotate(90deg); }
+        .attack-details summary:hover { background: #ddd6fe; }
+        .attack-detail-body { padding: 0 14px 12px 14px; }
+        .attack-log-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+        .attack-log-table th { background: #7c3aed; color: white; padding: 6px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .attack-log-table td { padding: 6px 10px; border-bottom: 1px solid #ede9fe; color: #374151; vertical-align: top; }
+        .attack-log-table tr:last-child td { border-bottom: none; }
+        .attack-log-table tbody tr:nth-child(odd) { background: #faf8ff; }
+        .attack-log-table tbody tr:hover { background: #ede9fe; }
+        .log-method { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #fee2e2; color: #b91c1c; font-weight: 600; font-size: 11px; }
+        .log-user { font-family: monospace; color: #6d28d9; }
+        .log-time { white-space: nowrap; color: #6b7280; font-size: 11px; }
+        details tr td { padding: 12px 16px; }
+        .details-row td { padding: 0 !important; border-bottom: none !important; background: transparent !important; }
+        .details-row:hover { background: transparent !important; }
     </style>
 </head>
 <body>
@@ -384,21 +405,23 @@ else
 fi
 sed -i "s|ALERTS_PLACEHOLDER|$ALERTS_HTML|g" "$HTML_FILE"
 
-# Génération du tableau des IPs avec géolocalisation
+# Génération du tableau des IPs avec géolocalisation + détails dépliables
 TOP_IPS_HTML=""
+RANK=0
 while IFS= read -r line; do
     if [ -n "$line" ]; then
+        RANK=$((RANK + 1))
         COUNT=$(echo "$line" | awk '{print $1}')
         IP=$(echo "$line" | awk '{print $2}')
-        
+
         # Géolocalisation avec drapeaux complets
         COUNTRY=$(get_country "$IP")
-        
+
         # Dernière activité
-        LAST_SEEN=$(cat /var/log/mail.log /var/log/mail.log.1 2>/dev/null | \
+        LAST_SEEN=$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
             grep "$IP" | grep "auth=0" | tail -1 | awk '{print $1, $2}' | \
             sed 's/T/ /' | cut -d'.' -f1)
-        
+
         if [ -z "$LAST_SEEN" ]; then
             LAST_SEEN_DISPLAY="Inconnue"
             ACTIVITY_INDICATOR='<div class="activity-indicator activity-old"><span class="activity-dot"></span>Ancienne</div>'
@@ -407,7 +430,7 @@ while IFS= read -r line; do
             LAST_SEEN_TIMESTAMP=$(date -d "$LAST_SEEN" +%s 2>/dev/null || echo 0)
             TIME_DIFF=$((CURRENT_TIMESTAMP - LAST_SEEN_TIMESTAMP))
             TIME_DIFF_HOURS=$((TIME_DIFF / 3600))
-            
+
             if [ "$TIME_DIFF_HOURS" -lt 1 ]; then
                 ACTIVITY_INDICATOR='<div class="activity-indicator activity-live"><span class="activity-dot"></span>EN COURS</div>'
             elif [ "$TIME_DIFF_HOURS" -lt 24 ]; then
@@ -416,7 +439,7 @@ while IFS= read -r line; do
                 ACTIVITY_INDICATOR='<div class="activity-indicator activity-old"><span class="activity-dot"></span>Ancienne</div>'
             fi
         fi
-        
+
         if [ "$COUNT" -gt 100 ]; then
             BADGE='<span class="badge badge-danger">Critique</span>'
         elif [ "$COUNT" -gt 50 ]; then
@@ -424,8 +447,64 @@ while IFS= read -r line; do
         else
             BADGE='<span class="badge badge-success">Normal</span>'
         fi
-        
-        TOP_IPS_HTML+="<tr><td><strong>$IP</strong></td><td>$COUNTRY</td><td>$COUNT</td><td>$LAST_SEEN_DISPLAY $ACTIVITY_INDICATOR</td><td>$BADGE</td></tr>"
+
+        # ── Collecte des détails d'attaque pour cette IP (max 20 entrées) ──
+        ATTACK_ROWS=""
+        while IFS= read -r logline; do
+            [ -z "$logline" ] && continue
+
+            # Extraire la date/heure
+            LOG_DT=$(echo "$logline" | awk '{print $1, $2}' | sed 's/T/ /' | cut -d'.' -f1)
+            LOG_DT_DISPLAY=$(date -d "$LOG_DT" '+%d/%m/%Y %H:%M:%S' 2>/dev/null || echo "$LOG_DT")
+
+            # Extraire la méthode SASL si présente
+            LOG_METHOD=$(echo "$logline" | grep -oE "sasl_method=[^,]+" | awk -F= '{print $2}')
+            #[ -z "$LOG_METHOD" ] && LOG_METHOD=$(echo "$logline" | grep -oE "auth=[^ ]+" | awk -F= '{print $2}')
+            [ -z "$LOG_METHOD" ] && LOG_METHOD="—"
+
+            # Extraire l'utilisateur tenté si présent
+            LOG_USER=$(echo "$logline" | grep -oE "sasl_username=[^,]+" | awk -F= '{print $2}')
+            [ -z "$LOG_USER" ] && LOG_USER=$(echo "$logline" | grep -oE "user=[^ ,]+" | awk -F= '{print $2}')
+            [ -z "$LOG_USER" ] && LOG_USER="—"
+
+            # Extraire le service (postfix, dovecot…)
+            LOG_SERVICE=$(echo "$logline" | awk -F'[][]' '{print $1}' | awk '{print $NF}' | tr -d ' :')
+            [ -z "$LOG_SERVICE" ] && LOG_SERVICE="—"
+
+            ATTACK_ROWS+="<tr>"
+            ATTACK_ROWS+="<td class=\"log-time\">$LOG_DT_DISPLAY</td>"
+            ATTACK_ROWS+="<td>$LOG_SERVICE</td>"
+            ATTACK_ROWS+="<td><span class=\"log-method\">$LOG_METHOD</span></td>"
+            ATTACK_ROWS+="<td class=\"log-user\">$LOG_USER</td>"
+            ATTACK_ROWS+="</tr>"
+        done <<< "$(cat /var/log/mail.log.1 /var/log/mail.log 2>/dev/null | \
+            grep "$IP" | grep "auth=0" | \
+            tail -20)"
+
+        if [ -z "$ATTACK_ROWS" ]; then
+            ATTACK_ROWS='<tr><td colspan="4" style="text-align:center;color:#9ca3af;">Aucun détail disponible</td></tr>'
+        fi
+
+        DETAILS_HTML="<details class=\"attack-details\">"
+        DETAILS_HTML+="<summary>🔍 Voir le détail des tentatives ($COUNT au total, 20 dernières affichées)</summary>"
+        DETAILS_HTML+="<div class=\"attack-detail-body\">"
+        DETAILS_HTML+="<table class=\"attack-log-table\"><thead><tr><th>Date / Heure</th><th>Service</th><th>Méthode</th><th>Utilisateur tenté</th></tr></thead>"
+        DETAILS_HTML+="<tbody>$ATTACK_ROWS</tbody></table>"
+        DETAILS_HTML+="</div></details>"
+
+        # Ligne principale du tableau
+        TOP_IPS_HTML+="<tr>"
+        TOP_IPS_HTML+="<td><strong>$IP</strong></td>"
+        TOP_IPS_HTML+="<td>$COUNTRY</td>"
+        TOP_IPS_HTML+="<td>$COUNT</td>"
+        TOP_IPS_HTML+="<td>$LAST_SEEN_DISPLAY $ACTIVITY_INDICATOR</td>"
+        TOP_IPS_HTML+="<td>$BADGE</td>"
+        TOP_IPS_HTML+="</tr>"
+
+        # Ligne dépliable sur toute la largeur (colspan=5)
+        TOP_IPS_HTML+="<tr class=\"details-row\">"
+        TOP_IPS_HTML+="<td colspan=\"5\" style=\"padding: 0 16px 8px 16px; background: #faf8ff;\">$DETAILS_HTML</td>"
+        TOP_IPS_HTML+="</tr>"
     fi
 done <<< "$TOP_IPS"
 [ -z "$TOP_IPS_HTML" ] && TOP_IPS_HTML='<tr><td colspan="5" style="text-align:center; color: #10b981;">Aucune attaque détectée sur la période ✓</td></tr>'
@@ -501,7 +580,7 @@ done <<< "$TOP_RECIPIENTS"
 sed -i "s|TOP_RECIPIENTS_PLACEHOLDER|$TOP_RECIPIENTS_HTML|g" "$HTML_FILE"
 
 BANNED_IPS_HTML=""
-for jail in postfix sasl dovecot sshd; do
+for jail in postfix sasl dovecot sshd recidive; do
     if fail2ban-client status "$jail" &>/dev/null; then
         BANNED_LIST=$(fail2ban-client status "$jail" 2>/dev/null | grep "Banned IP list" | awk -F: '{print $2}' | xargs)
         if [ -n "$BANNED_LIST" ] && [ "$BANNED_LIST" != " " ]; then
